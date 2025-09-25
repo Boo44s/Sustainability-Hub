@@ -2,6 +2,80 @@ document.addEventListener('DOMContentLoaded', function() {
     const hamburger = document.getElementById('hamburger');
     const navMenu = document.getElementById('navMenu');
 
+    // Toast Notification System
+    function showToast(message, type = 'info', duration = 5000) {
+        const toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const icons = {
+            success: '✓',
+            error: '✗',
+            info: 'ℹ'
+        };
+
+        toast.innerHTML = `
+            <div class="toast-icon">${icons[type] || icons.info}</div>
+            <div class="toast-content">
+                <p>${message}</p>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        // Show toast
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // Form Validation
+    function validateEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    function validateField(field) {
+        const formGroup = field.closest('.form-group');
+        const errorMessage = formGroup.querySelector('.error-message');
+        let isValid = true;
+
+        // Remove existing error states
+        formGroup.classList.remove('has-error', 'has-success');
+
+        if (field.hasAttribute('required') && !field.value.trim()) {
+            isValid = false;
+            showFieldError(formGroup, errorMessage, 'Questo campo è obbligatorio');
+        } else if (field.type === 'email' && field.value && !validateEmail(field.value)) {
+            isValid = false;
+            showFieldError(formGroup, errorMessage, 'Inserisci un indirizzo email valido');
+        } else if (field.hasAttribute('minlength') && field.value.length < field.getAttribute('minlength')) {
+            isValid = false;
+            showFieldError(formGroup, errorMessage, `Minimo ${field.getAttribute('minlength')} caratteri`);
+        } else if (field.value.trim()) {
+            formGroup.classList.add('has-success');
+        }
+
+        return isValid;
+    }
+
+    function showFieldError(formGroup, errorMessage, message) {
+        formGroup.classList.add('has-error');
+        if (!errorMessage) {
+            errorMessage = document.createElement('div');
+            errorMessage.className = 'error-message';
+            formGroup.appendChild(errorMessage);
+        }
+        errorMessage.textContent = message;
+    }
+
     if (hamburger) {
         hamburger.addEventListener('click', function() {
             hamburger.classList.toggle('active');
@@ -12,12 +86,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const navLinks = document.querySelectorAll('.nav-menu a');
     navLinks.forEach(link => {
         link.addEventListener('click', function() {
-            if (hamburger) {
+            if (hamburger && navMenu) {
                 hamburger.classList.remove('active');
                 navMenu.classList.remove('active');
             }
         });
     });
+
+    // Scroll to Top Button
+    const scrollToTopBtn = document.getElementById('scrollToTop');
+    if (scrollToTopBtn) {
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                scrollToTopBtn.classList.add('visible');
+            } else {
+                scrollToTopBtn.classList.remove('visible');
+            }
+        });
+
+        scrollToTopBtn.addEventListener('click', function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    }
 
     function animateCounter(element) {
         const target = parseInt(element.getAttribute('data-target'));
@@ -87,15 +180,84 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         updateCountdown();
-        const countdownInterval = setInterval(updateCountdown, 1000);
+        let countdownInterval = setInterval(updateCountdown, 1000);
+
+        // Pause countdown when page is not visible (performance optimization)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (countdownInterval) clearInterval(countdownInterval);
+            } else {
+                updateCountdown();
+                countdownInterval = setInterval(updateCountdown, 1000);
+            }
+        });
+    }
+
+    // Lazy Loading for Images
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    if (img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.classList.remove('lazy');
+                        observer.unobserve(img);
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('img[data-src]').forEach(img => {
+            imageObserver.observe(img);
+        });
     }
 
     const newsletterForm = document.getElementById('newsletterForm');
     if (newsletterForm) {
+        // Real-time validation
+        const formFields = newsletterForm.querySelectorAll('input[required], select[required]');
+        formFields.forEach(field => {
+            field.addEventListener('blur', () => validateField(field));
+            field.addEventListener('input', () => {
+                if (field.classList.contains('error')) {
+                    validateField(field);
+                }
+            });
+        });
+
         newsletterForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Grazie per esserti iscritto alla newsletter! Riceverai una conferma via email.');
-            newsletterForm.reset();
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+
+            // Validate all fields
+            let isFormValid = true;
+            formFields.forEach(field => {
+                if (!validateField(field)) {
+                    isFormValid = false;
+                }
+            });
+
+            if (!isFormValid) {
+                showToast('Per favore, correggi gli errori nel form', 'error');
+                return;
+            }
+
+            // Loading state
+            submitBtn.classList.add('btn-loading');
+
+            // Simulate API call
+            setTimeout(() => {
+                submitBtn.classList.remove('btn-loading');
+                showToast('Iscrizione completata! Riceverai il welcome kit digitale.', 'success');
+                newsletterForm.reset();
+
+                // Remove validation states
+                formFields.forEach(field => {
+                    field.closest('.form-group').classList.remove('has-success', 'has-error');
+                });
+            }, 2000);
         });
     }
 
@@ -111,11 +273,45 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        // Real-time validation for proposal form
+        const formFields = proposalForm.querySelectorAll('input[required], select[required], textarea[required]');
+        formFields.forEach(field => {
+            field.addEventListener('blur', () => validateField(field));
+        });
+
         proposalForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Proposta inviata con successo! Ti contatteremo entro 1 settimana.');
-            proposalForm.reset();
-            if (charCount) charCount.textContent = '0/500';
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+
+            // Validate all fields
+            let isFormValid = true;
+            formFields.forEach(field => {
+                if (!validateField(field)) {
+                    isFormValid = false;
+                }
+            });
+
+            if (!isFormValid) {
+                showToast('Per favore, completa tutti i campi obbligatori', 'error');
+                return;
+            }
+
+            // Loading state
+            submitBtn.classList.add('btn-loading');
+
+            // Simulate API call
+            setTimeout(() => {
+                submitBtn.classList.remove('btn-loading');
+                showToast('Proposta inviata con successo! Ti contatteremo entro 1 settimana.', 'success');
+                proposalForm.reset();
+                if (charCount) charCount.textContent = '0/500';
+
+                // Remove validation states
+                formFields.forEach(field => {
+                    field.closest('.form-group').classList.remove('has-success', 'has-error');
+                });
+            }, 2500);
         });
     }
 
@@ -344,4 +540,27 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
         fadeObserver.observe(el);
     });
+
+    // Tab functionality for editions
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    if (tabButtons.length > 0) {
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+
+                // Add active class to clicked button and corresponding content
+                this.classList.add('active');
+                const targetContent = document.getElementById('tab-' + tabId);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+            });
+        });
+    }
 });
